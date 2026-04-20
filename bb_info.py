@@ -1,6 +1,5 @@
 import time
 import json
-import re
 from pathlib import Path
 from playwright.sync_api import Page, Playwright, sync_playwright
 
@@ -9,10 +8,30 @@ def squeeze(s: str) -> str:
 
 
 def expand_due_view_blocks(page: Page) -> None:
-    page.locator("#block\\:\\:1-dueView\\:\\:1-dueView_1").click()
-    page.locator("#block\\:\\:1-dueView\\:\\:1-dueView_2").click()
-    page.locator("#block\\:\\:1-dueView\\:\\:1-dueView_3").click()
-    page.locator("#block\\:\\:1-dueView\\:\\:1-dueView_4").click()
+    # Expand all dueView blocks (Today/Tomorrow/This Week/Future) if collapsed.
+    # Clicking the header toggles; check aria-expanded to avoid collapsing.
+    for i in range(1, 5):
+        header = page.locator(f"#header\\:\\:1-dueView\\:\\:1-dueView_{i}")
+        header.wait_for(state="attached", timeout=20000)
+        expanded = (header.get_attribute("aria-expanded") or "").lower()
+        if expanded != "true":
+            header.click()
+
+
+def open_notifications_dashboard(page: Page, dashboard_url: str | None = None) -> str:
+    """
+    Navigate to Notifications Dashboard and ensure #dueView is ready.
+
+    - If dashboard_url is provided, use a direct navigation (works from detail pages).
+    - Otherwise, click the "Notifications Dashboard" tab and return the resolved URL.
+    """
+    if dashboard_url:
+        page.goto(dashboard_url, wait_until="domcontentloaded")
+    else:
+        page.get_by_role("link", name="Notifications Dashboard").click()
+    page.locator("#dueView").wait_for(state="visible", timeout=20000)
+    expand_due_view_blocks(page)
+    return page.url
 
 
 def run(playwright: Playwright) -> None:
@@ -69,44 +88,42 @@ def run(playwright: Playwright) -> None:
 
         # -- section: due items (title | course | due on detail page) ---
         print("Fetching due deadlines (DDL)...")
-        page.get_by_role("link", name="Notifications Dashboard").click()
-        expand_due_view_blocks(page)
+        dashboard_url = open_notifications_dashboard(page)
 
         f.write("=== SECTION: Due items === \n\n")
 
         due_row_sel = "#dueView ul.itemGroups > li"
         title_sel = 'a[href="javascript:void(0)"][onclick*="actionSelected"]'
 
-        due_by_id: dict[str, dict[str, str]] = {}
-        order: list[str] = []
+        # Collect due items by visible text (title + course). Blackboard may regenerate
+        # internal actionSelected ids on refresh, so we avoid persisting those ids.
+        due_items: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
         n = page.locator(due_row_sel).count()
         for i in range(n):
             row = page.locator(due_row_sel).nth(i)
-            onclick = row.locator(title_sel).get_attribute("onclick") or ""
-            m = re.search(r"actionSelected\('([^']+)'", onclick)
-            if not m:
+            title = squeeze(row.locator(title_sel).inner_text())
+            course = squeeze(row.locator("div.course > a").inner_text())
+            key = (title, course)
+            if key in seen:
                 continue
-            item_id = m.group(1)
-            if item_id in due_by_id:
-                continue
-            due_by_id[item_id] = {
-                "title": squeeze(row.locator(title_sel).inner_text()),
-                "course": squeeze(row.locator("div.course > a").inner_text()),
-            }
-            order.append(item_id)
+            seen.add(key)
+            due_items.append({"title": title, "course": course})
 
-        total_due = len(order)
-        for idx, item_id in enumerate(order):
-            meta = due_by_id[item_id]
+        total_due = len(due_items)
+        for idx, meta in enumerate(due_items):
             print(f"Entering due item {idx + 1}/{total_due}: {meta['title']}")
             if idx > 0:
-                page.go_back(wait_until="domcontentloaded")
-                page.locator("#dueView").wait_for(state="visible", timeout=20000)
-                expand_due_view_blocks(page)
+                open_notifications_dashboard(page, dashboard_url)
 
-            page.locator(
-                f"xpath=//div[@id='dueView']//a[contains(@onclick, \"actionSelected('{item_id}'\")]"
-            ).first.click()
+            # Re-locate the due row in the current DOM using (title, course), then click title.
+            row = (
+                page.locator(due_row_sel)
+                .filter(has_text=meta["title"])
+                .filter(has_text=meta["course"])
+                .first
+            )
+            row.locator(title_sel).first.click()
             page.locator("#metadata").wait_for(state="visible", timeout=20000)
             due_text = squeeze(
                 page.locator("#metadata .metaSection")
