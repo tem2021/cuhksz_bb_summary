@@ -4,11 +4,11 @@ A small [Playwright](https://playwright.dev/python/) script that logs into **CUH
 
 - **Course Announcements** (stream items on the Course Announcement page)
 - **Current Courses** (My Courses widget)
-- **Due items** — each unique task taken **only** from the **All Items** collapsible blocks under **What’s Past Due** and **What’s Due** (not from separate Today / Tomorrow / … buckets), with **title**, **course name**, and **due date/time** from the assignment detail page (deduplicated by title + course name)
+- **Due items** — each unique task taken **only** from **What’s Due**: the **Today**, **Tomorrow**, **This Week**, and **Future** collapsible buckets. Tasks under **What’s Past Due** (**All Items**) are **not** expanded or collected. Each line includes **title**, **course name**, and **due date/time** from the assignment detail page (deduplicated by title + course name).
 
-**Language:** The script targets the **English** Blackboard UI only. Navigation and copy (for example **Notifications Dashboard**, the **All Items** headers, and **Due Date** in the detail panel) are resolved with English-oriented roles and text. Use **English** as the portal language, or adjust `cuhksz_bb_summary.py` to match your locale.
+**Language:** The script targets the **English** Blackboard UI only. Navigation and copy (for example **Notifications Dashboard**, the **What’s Due** bucket labels above, and **Due Date** in the detail panel) are resolved with English-oriented roles and text. Use **English** as the portal language, or adjust `cuhksz_bb_summary.py` to match your locale.
 
-**Home / My Courses:** In Blackboard, open **Home** and configure the **My Courses** module so it lists **only the current term** (current semester’s courses). The script reads whatever appears there for the **Current Courses** section and only sees due items for courses the portal actually surfaces in these widgets—trimming old terms keeps the export focused on this semester.
+**Home / My Courses:** In Blackboard, open **Home** and configure the **My Courses** module so it lists **only the current term** (current semester’s courses). The script reads whatever appears there for the **Current Courses** section. Due items still come from the **Notifications Dashboard** **What’s Due** module (upcoming buckets), not from Past Due.
 
 Output is written to `course_data_summary.txt` in the **current working directory** (typically this project folder).
 
@@ -66,7 +66,7 @@ To debug with a visible browser, edit `cuhksz_bb_summary.py`: use `chromium.laun
 
 1. **Course Announcement** — announcement blocks as plain text
 2. **Current Courses** — text from the My Courses area
-3. **Due items** — one line per unique due item:
+3. **Due items** — one line per unique due item (from **Today** / **Tomorrow** / **This Week** / **Future** only):
   `title | course_name | due_datetime_from_detail_page`
 
 ---
@@ -74,7 +74,7 @@ To debug with a visible browser, edit `cuhksz_bb_summary.py`: use `chromium.laun
 ## Limitations
 
 - UI selectors match **this Blackboard instance**; if your institution updates the portal, locators may need updates.
-- The same task can appear in more than one list or bucket in the UI; duplicates are collapsed using **title + course name**.
+- The same task could theoretically appear in more than one bucket; duplicates are collapsed using **title + course name** so each item is written once.
 
 ---
 

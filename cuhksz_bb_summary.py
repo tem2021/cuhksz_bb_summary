@@ -8,36 +8,36 @@ def squeeze(s: str) -> str:
     return " ".join(s.split())
 
 
-ALL_ITEMS_HEADER_NAME = re.compile(r"^All Items")
+# What's Due (#dueView) buckets from Blackboard Nautilus (see notification HTML).
+# "All Items" under What's Past Due (#pastDueView) is intentionally excluded.
+DUE_VIEW_BUCKET_HEADER = re.compile(r"^(Today|Tomorrow|This Week|Future)(\s|\(|$)")
 
 
 def expand_due_view_blocks(page: Page) -> None:
-    # Only expand collapsible headers titled "All Items" (not Today / Tomorrow / …).
+    """Expand Today / Tomorrow / This Week / Future under #dueView. Do not open Past Due 'All Items'."""
     page.locator("#dueView").wait_for(state="visible", timeout=20000)
-    page.locator("#pastDueView").wait_for(state="visible", timeout=20000)
-    for view_sel in ("#pastDueView", "#dueView"):
-        headers = page.locator(view_sel).get_by_role("button", name=ALL_ITEMS_HEADER_NAME)
-        for i in range(headers.count()):
-            h = headers.nth(i)
-            h.wait_for(state="attached", timeout=20000)
-            if (h.get_attribute("aria-expanded") or "").lower() != "true":
-                h.click()
+    headers = page.locator("#dueView").get_by_role("button", name=DUE_VIEW_BUCKET_HEADER)
+    for i in range(headers.count()):
+        h = headers.nth(i)
+        h.wait_for(state="attached", timeout=20000)
+        if (h.get_attribute("aria-expanded") or "").lower() != "true":
+            h.click()
 
 
-def all_items_due_rows(page: Page) -> Locator:
+def whats_due_bucket_rows(page: Page) -> Locator:
     """
-    Rows under ul.itemGroups only inside blockGroups <li> whose header is "All Items".
-    Matches Blackboard: one list per Past Due / What's Due when that view uses All Items.
+    Task rows under ul.itemGroups for What's Due time buckets only (Today, Tomorrow,
+    This Week, Future). Excludes What's Past Due (All Items).
     """
-    blocks = page.locator(
-        "#pastDueView ul.blockGroups > li, #dueView ul.blockGroups > li"
-    ).filter(has=page.get_by_role("button", name=ALL_ITEMS_HEADER_NAME))
+    blocks = page.locator("#dueView ul.blockGroups > li").filter(
+        has=page.get_by_role("button", name=DUE_VIEW_BUCKET_HEADER)
+    )
     return blocks.locator("ul.itemGroups > li")
 
 
 def open_notifications_dashboard(page: Page, dashboard_url: str | None = None) -> str:
     """
-    Navigate to Notifications Dashboard and ensure #pastDueView / #dueView are ready.
+    Navigate to Notifications Dashboard and ensure #dueView (What's Due) is ready.
 
     - If dashboard_url is provided, use a direct navigation (works from detail pages).
     - Otherwise, click the "Notifications Dashboard" tab and return the resolved URL.
@@ -108,7 +108,7 @@ def run(playwright: Playwright) -> None:
 
         f.write("=== SECTION: Due items === \n\n")
 
-        due_rows = all_items_due_rows(page)
+        due_rows = whats_due_bucket_rows(page)
         title_sel = 'a[href="javascript:void(0)"][onclick*="actionSelected"]'
 
         # Collect due items by visible text (title + course). Blackboard may regenerate
@@ -134,7 +134,7 @@ def run(playwright: Playwright) -> None:
 
             # Re-locate the due row in the current DOM using (title, course), then click title.
             row = (
-                all_items_due_rows(page)
+                whats_due_bucket_rows(page)
                 .filter(has_text=meta["title"])
                 .filter(has_text=meta["course"])
                 .first
