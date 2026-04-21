@@ -4,7 +4,11 @@ A small [Playwright](https://playwright.dev/python/) script that logs into **CUH
 
 - **Course Announcements** (stream items on the Course Announcement page)
 - **Current Courses** (My Courses widget)
-- **Due items** — each unique task from the Notifications **What’s Due** list, with **title**, **course name**, and **due date/time** from the assignment detail page (deduplicated by Blackboard’s `actionSelected` id)
+- **Due items** — each unique task taken **only** from the **All Items** collapsible blocks under **What’s Past Due** and **What’s Due** (not from separate Today / Tomorrow / … buckets), with **title**, **course name**, and **due date/time** from the assignment detail page (deduplicated by title + course name)
+
+**Language:** The script targets the **English** Blackboard UI only. Navigation and copy (for example **Notifications Dashboard**, the **All Items** headers, and **Due Date** in the detail panel) are resolved with English-oriented roles and text. Use **English** as the portal language, or adjust `bb_info.py` to match your locale.
+
+**Home / My Courses:** In Blackboard, open **Home** and configure the **My Courses** module so it lists **only the current term** (current semester’s courses). The script reads whatever appears there for the **Current Courses** section and only sees due items for courses the portal actually surfaces in these widgets—trimming old terms keeps the export focused on this semester.
 
 Output is written to `course_data_summary.txt` in the **current working directory** (typically this project folder).
 
@@ -70,7 +74,7 @@ To debug with a visible browser, edit `bb_info.py` and set `headless=False` in `
 ## Limitations
 
 - UI selectors match **this Blackboard instance**; if your institution updates the portal, locators may need updates.
-- Same task can appear in more than one time bucket in the UI; duplicates are collapsed using the `item_id` parsed from each link’s `onclick` handler.
+- The same task can appear in more than one list or bucket in the UI; duplicates are collapsed using **title + course name**.
 
 ---
 
